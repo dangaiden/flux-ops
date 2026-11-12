@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-demo
+  namespace: demo
+---
+# HOW to reach OpenBao: its address, the KV engine, and how to log in
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao
+  namespace: demo
+spec:
+  provider:
+    vault:                       # ESO's Vault provider works with OpenBao
+      server: http://openbao.openbao.svc.cluster.local:8200
+      path: secret               # the KV engine mount
+      version: v2
+      auth:
+        kubernetes:
+          mountPath: kubernetes  # the auth method enabled in step 2
+          role: eso-demo         # the role created in step 2
+          serviceAccountRef:
+            name: eso-demo       # log in as this service account
+---
+# WHAT to fetch, and which Kubernetes Secret to create from it
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: db-credentials
+  namespace: demo
+spec:
+  refreshInterval: 1m            # re-read OpenBao every minute (picks up rotation)
+  secretStoreRef:
+    name: openbao
+    kind: SecretStore
+  target:
+    name: db-credentials         # the Kubernetes Secret ESO creates
+  data:
+    - secretKey: username        # key in the Kubernetes Secret
+      remoteRef:
+        key: demo/db             # path in OpenBao
+        property: username       # field at that path
+    - secretKey: password
+      remoteRef:
+        key: demo/db
+        property: password
